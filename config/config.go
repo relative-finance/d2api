@@ -10,13 +10,23 @@ import (
 type Config struct {
 	Redis         RedisConfig
 	Server        ServerConfig
+	Mongo         MongoConfig
 	InventoryPath string
 	TimeToCancel  uint32
 	Interval      uint32
+	Tournament    TournamentConfig
+}
+type TournamentConfig struct {
+	URL string
 }
 
 type ServerConfig struct {
 	Port string
+}
+
+type MongoConfig struct {
+	URL      string
+	Database string
 }
 
 type RedisConfig struct {
@@ -38,6 +48,9 @@ func NewConfig() *Config {
 	}
 
 	interval, err := strconv.ParseUint(readEnvVar("CRAWLER_INTERVAL"), 10, 32)
+	if err != nil {
+		interval = 60
+	}
 
 	return &Config{
 		Redis: RedisConfig{
@@ -49,9 +62,16 @@ func NewConfig() *Config {
 		Server: ServerConfig{
 			Port: readEnvVar("SERVER_PORT"),
 		},
+		Mongo: MongoConfig{
+			URL:      readEnvVar("MONGO_URL"),
+			Database: readEnvVar("MONGO_DATABASE"),
+		},
 		InventoryPath: readEnvVar("INVENTORY_PATH"),
 		TimeToCancel:  uint32(timeToCancel),
 		Interval:      uint32(interval),
+		Tournament: TournamentConfig{
+			URL: readEnvVar("TOURNAMENT_URL"),
+		},
 	}
 }
 

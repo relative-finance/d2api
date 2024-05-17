@@ -13,9 +13,27 @@ func RegisterServer(router *gin.Engine, ctx context.Context) {
 	v1 := router.Group("/v1")
 	{
 		v1.POST("/match", postMatch)
+		v1.POST("/schedule-tournament", postScheduleTournament)
 		v1.GET("/match/:matchIdx", getMatch)
 		v1.GET("/player/:steamId/matches", getPlayerHistory)
+		v1.GET("/player/od/:steamId/matches", getPlayerHistoryOD)
 	}
+}
+
+func postScheduleTournament(c *gin.Context) {
+	var req requests.ScheduleMatchRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+
+	res, err := wires.Instance.TournamentService.ScheduleRound(req.Matches)
+	if err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(200, res)
 }
 
 func postMatch(c *gin.Context) {
@@ -46,14 +64,10 @@ func getMatch(c *gin.Context) {
 
 func getPlayerHistory(c *gin.Context) {
 	steamId := c.Param("steamId")
-	limit := c.Query("limit")
-	limitInt := 10
-	if limit != "" {
-		var err error
-		limitInt, err = strconv.Atoi(limit)
-		if err != nil {
-			c.JSON(400, gin.H{"error": "need to send a valid limit"})
-		}
+	limit := c.DefaultQuery("limit", "10")
+	limitInt, err := strconv.Atoi(limit)
+	if err != nil {
+		c.JSON(400, gin.H{"error": "need to send a valid limit"})
 	}
 
 	steamIdUint, err := strconv.ParseInt(steamId, 10, 64)
@@ -62,6 +76,28 @@ func getPlayerHistory(c *gin.Context) {
 	}
 
 	history, err := wires.Instance.MatchService.GetPlayerHistory(steamIdUint, limitInt)
+	if err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(200, history)
+}
+
+func getPlayerHistoryOD(c *gin.Context) {
+	steamId := c.Param("steamId")
+	limit := c.DefaultQuery("limit", "10")
+	limitInt, err := strconv.Atoi(limit)
+	if err != nil {
+		c.JSON(400, gin.H{"error": "need to send a valid limit"})
+	}
+
+	steamIdUint, err := strconv.ParseInt(steamId, 10, 64)
+	if err != nil {
+		c.JSON(400, gin.H{"error": "need to send a valid steamId"})
+	}
+
+	history, err := wires.Instance.MatchService.GetPlayerHistoryOpenDota(steamIdUint, limitInt)
 	if err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return

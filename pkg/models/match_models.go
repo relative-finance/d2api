@@ -1,21 +1,29 @@
 package models
 
-import "github.com/paralin/go-dota2/protocol"
+import (
+	"d2api/pkg/requests"
+
+	"github.com/paralin/go-dota2/protocol"
+)
 
 type MatchStatus struct {
-	MatchId uint64
-	Status  string
+	MatchId           uint64
+	Status            string
+	IsTournamentMatch bool
+	TourMatch         requests.TourMatch
 }
 
 type MatchDetails struct {
 	MatchStatus
-	HandlerId    uint16
-	CancelReason string
+	HandlerId     uint16
+	CancelReason  string
+	TeamDidntShow string
 }
 
 type MatchCancel struct {
 	MatchStatus
-	Reason string
+	Reason        string
+	TeamDidntShow string
 }
 
 type MatchLobby struct {
