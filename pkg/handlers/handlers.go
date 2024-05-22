@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/paralin/go-dota2"
@@ -24,6 +25,8 @@ type Handler struct {
 	SteamConfig
 	Occupied bool
 }
+
+var mutex = &sync.Mutex{}
 
 func NewHandler(steamConfig SteamConfig) *Handler {
 	return &Handler{
@@ -93,7 +96,7 @@ func (h *Handler) InitSteamConnection() {
 
 			eventCh, _, err := h.DotaClient.GetCache().SubscribeType(cso.Lobby) // Listen to lobby cache
 			if err != nil {
-				log.Fatalf("Failed to subscribe to lobby cache: %v", err)
+				log.Println("Failed to subscribe to lobby cache:", err)
 			}
 
 			lobbyEvent := <-eventCh
@@ -107,6 +110,8 @@ func (h *Handler) InitSteamConnection() {
 }
 
 func GetFreeHandler(handlers []*Handler) (*Handler, uint16, error) {
+	mutex.Lock()
+	defer mutex.Unlock()
 	for i, handler := range handlers {
 		if !handler.Occupied {
 			handler.Occupied = true
