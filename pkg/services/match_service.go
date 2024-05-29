@@ -13,11 +13,13 @@ import (
 	"d2api/pkg/models"
 	"d2api/pkg/repository"
 	"d2api/pkg/requests"
+	"d2api/pkg/response"
 	"d2api/pkg/scheduled_matches"
 	"d2api/pkg/utils"
 
 	"github.com/jasonodonnell/go-opendota"
 	"github.com/paralin/go-dota2/protocol"
+	"github.com/paralin/go-steam/steamid"
 	"go.mongodb.org/mongo-driver/bson"
 )
 
@@ -64,7 +66,6 @@ func (s *MatchService) GetMatch(matchIdx string) (interface{}, error) {
 	} else if match.Status == "scheduled" {
 		lobby, err := utils.GetCurrentLobby(handler)
 		if err != nil {
-			log.Println("Failed to get lobby: ", err)
 			return nil, err
 		}
 		return models.MatchLobby{MatchStatus: match.MatchStatus, Lobby: lobby}, nil
@@ -88,6 +89,62 @@ func (s *MatchService) GetMatch(matchIdx string) (interface{}, error) {
 	} else {
 		return nil, errors.New("match not found")
 	}
+}
+
+func (s *MatchService) GetMatchInfo(matchIdx string) (*response.MatchInfo, error) {
+	data, err := s.GetMatch(matchIdx)
+	if err != nil {
+		return nil, err
+	}
+
+	var matchInfo *response.MatchInfo
+	switch match := data.(type) {
+	case models.MatchLobby:
+		log.Println("MatchLobby")
+		matchInfo = &response.MatchInfo{Status: match.MatchStatus.Status}
+		for _, player := range match.TeamA {
+			playerInfo := response.Player{SteamId: player, IsInLobby: false, IsInRightTeam: false}
+			for _, lobbyPlayer := range match.Lobby.AllMembers {
+				if *lobbyPlayer.Id == playerInfo.SteamId {
+					playerInfo.IsInLobby = true
+					if *lobbyPlayer.Team == *protocol.DOTA_GC_TEAM_DOTA_GC_TEAM_GOOD_GUYS.Enum() {
+						playerInfo.IsInRightTeam = true
+					}
+					break
+				}
+			}
+
+			matchInfo.RadiantPlayers = append(matchInfo.RadiantPlayers, playerInfo)
+		}
+
+		for _, player := range match.TeamB {
+			playerInfo := response.Player{SteamId: player, IsInLobby: false, IsInRightTeam: false}
+			for _, lobbyPlayer := range match.Lobby.AllMembers {
+				if *lobbyPlayer.Id == playerInfo.SteamId {
+					playerInfo.IsInLobby = true
+					if *lobbyPlayer.Team == *protocol.DOTA_GC_TEAM_DOTA_GC_TEAM_BAD_GUYS.Enum() {
+						playerInfo.IsInRightTeam = true
+					}
+					break
+				}
+			}
+			matchInfo.DirePlayers = append(matchInfo.DirePlayers, playerInfo)
+		}
+
+	case models.MatchData:
+		log.Println("MatchData")
+		matchInfo = &response.MatchInfo{Status: match.MatchStatus.Status}
+	case models.MatchCancel:
+		log.Println("MatchCancel")
+		matchInfo = &response.MatchInfo{Status: match.MatchStatus.Status, Cancelled: true}
+	case models.MatchDetails:
+		log.Println("MatchDetails")
+		matchInfo = &response.MatchInfo{Status: match.MatchStatus.Status}
+	default:
+		return nil, errors.New("unknown match type")
+	}
+
+	return matchInfo, nil
 }
 
 func (s *MatchService) GetPlayerHistoryOpenDota(steamId int64, limit int) (interface{}, error) {
@@ -134,4 +191,18 @@ func (s *MatchService) GetPlayerHistory(steamId int64, limit int) (interface{}, 
 	}
 
 	return matches, nil
+}
+
+func (s *MatchService) ReinvitePlayers(req requests.ReinvitePlayersReq) error {
+	match, err := utils.GetMatchRedis(strconv.Itoa(req.MatchIdx))
+	if err != nil {
+		return err
+	}
+
+	handler := s.Handlers[match.HandlerId]
+	for _, player := range req.Players {
+		handler.DotaClient.InviteLobbyMember(steamid.SteamId(player))
+	}
+
+	return nil
 }

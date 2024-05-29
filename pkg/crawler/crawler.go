@@ -15,14 +15,14 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-func safeSending(data *response.TournamentEndRequest, repeatTimes int) {
+func safeSending(data interface{}, repeatTimes int, endpoint string) {
 	for i := 0; i < repeatTimes; i++ {
-		if utils.SendMatchResultToTournament(tournamentEndpoint, data) {
-			log.Println("Match result sent to tournament")
+		if utils.SendMatchResult(endpoint, data) {
+			log.Println("Match result sent to " + endpoint)
 			return
 		}
 	}
-	log.Println("Failed to send match result to tournament")
+	log.Println("Failed to send match result to " + endpoint)
 }
 
 func sendMatchFinished(match *models.MatchData) {
@@ -39,7 +39,7 @@ func sendMatchFinished(match *models.MatchData) {
 	resp := response.TournamentEndRequest{
 		TourId:    match.TourMatch.TournamentId,
 		MatchId:   match.TourMatch.MatchIdx,
-		Iteration: 1,
+		Iteration: match.TourMatch.Iteration,
 		Cancelled: false,
 	}
 
@@ -51,7 +51,7 @@ func sendMatchFinished(match *models.MatchData) {
 		resp.Loser = radiant
 	}
 
-	safeSending(&resp, 5)
+	safeSending(resp, 5, tournamentEndpoint)
 }
 
 func matchFinished(match *models.MatchData) {
@@ -79,6 +79,10 @@ func matchFinished(match *models.MatchData) {
 			}
 		}(playerId, matchId)
 	}
+
+	if statsEndpoint != "" {
+		safeSending(*match, 5, statsEndpoint)
+	}
 }
 
 func sendMatchCancelled(match *models.MatchCancel) {
@@ -94,7 +98,7 @@ func sendMatchCancelled(match *models.MatchCancel) {
 	resp := response.TournamentEndRequest{
 		TourId:    match.TourMatch.TournamentId,
 		MatchId:   match.TourMatch.MatchIdx,
-		Iteration: 1,
+		Iteration: match.TourMatch.Iteration,
 		Cancelled: true,
 	}
 
@@ -114,7 +118,7 @@ func sendMatchCancelled(match *models.MatchCancel) {
 		resp.Loser = dire
 	}
 
-	safeSending(&resp, 5)
+	safeSending(resp, 5, tournamentEndpoint)
 }
 
 func matchCancelled(match *models.MatchCancel) {
@@ -129,7 +133,6 @@ func crawlMatches() {
 	for _, matchIdx := range scheduled_matches.Get() {
 		match, err := wires.Instance.MatchService.GetMatch(matchIdx)
 		if err != nil {
-			log.Println("Failed to get match: ", err)
 			continue
 		}
 
@@ -153,11 +156,12 @@ func crawlMatches() {
 	}
 }
 
-var tournamentEndpoint string
+var tournamentEndpoint, statsEndpoint string
 
 func Init(config *config.Config) bool {
 	ticker := time.NewTicker(time.Duration(config.Interval) * time.Second)
 	tournamentEndpoint = config.Tournament.URL + "/tournaments/move-teams-to-next-round"
+	statsEndpoint = config.Stats.URL
 	quit := make(chan struct{})
 	scheduled_matches.Init()
 	go func() bool {

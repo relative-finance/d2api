@@ -13,3 +13,16 @@ type TournamentEndRequest struct {
 	Cancelled bool    `json:"cancelled"`
 	Iteration int     `json:"iteration"`
 }
+
+type Player struct {
+	SteamId       uint64 `json:"steamId"`
+	IsInLobby     bool   `json:"isInLobby"`
+	IsInRightTeam bool   `json:"isInRightTeam"`
+}
+
+type MatchInfo struct {
+	Status         string   `json:"status"`
+	Cancelled      bool     `json:"cancelled,omitempty"`
+	RadiantPlayers []Player `json:"radiantPlayers,omitempty"`
+	DirePlayers    []Player `json:"direPlayers,omitempty"`
+}

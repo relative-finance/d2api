@@ -1,6 +1,7 @@
 package config
 
 import (
+	"log"
 	"os"
 	"strconv"
 
@@ -15,8 +16,18 @@ type Config struct {
 	TimeToCancel  uint32
 	Interval      uint32
 	Tournament    TournamentConfig
+	Stats         StatsConfig
+	SteamWebApi   SteamWebApiConfig
+}
+type SteamWebApiConfig struct {
+	Key string
+	URL string
 }
 type TournamentConfig struct {
+	URL string
+}
+
+type StatsConfig struct {
 	URL string
 }
 
@@ -36,7 +47,13 @@ type RedisConfig struct {
 	DB       int
 }
 
+var GlobalConfig *Config
+
 func NewConfig() *Config {
+	err := godotenv.Load(".env")
+	if err != nil {
+		log.Println("Configuration error: ", err)
+	}
 	db, err := strconv.Atoi(readEnvVar("REDIS_DB"))
 	if err != nil {
 		db = 0
@@ -52,7 +69,7 @@ func NewConfig() *Config {
 		interval = 60
 	}
 
-	return &Config{
+	GlobalConfig = &Config{
 		Redis: RedisConfig{
 			Host:     readEnvVar("REDIS_HOST"),
 			Port:     readEnvVar("REDIS_PORT"),
@@ -72,10 +89,18 @@ func NewConfig() *Config {
 		Tournament: TournamentConfig{
 			URL: readEnvVar("TOURNAMENT_URL"),
 		},
+		Stats: StatsConfig{
+			URL: readEnvVar("STATS_URL"),
+		},
+		SteamWebApi: SteamWebApiConfig{
+			URL: readEnvVar("STEAM_WEB_API_URL"),
+			Key: readEnvVar("STEAM_WEB_API_KEY"),
+		},
 	}
+
+	return GlobalConfig
 }
 
 func readEnvVar(name string) string {
-	godotenv.Load(".env")
 	return os.Getenv(name)
 }
