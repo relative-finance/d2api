@@ -9,10 +9,10 @@ services:
     ports:
       - "8080:8080"
     networks:
-      - tournament-service_default
+      - showdown-api_default
     command: go run ./cmd/main.go
 
 
 networks:
-  tournament-service_default:
+  showdown-api_default:
     external: true
