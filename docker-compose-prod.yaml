@@ -1,15 +1,4 @@
 services:
-  redis-d2:
-    image: redis:latest
-    container_name: redis-d2
-    ports:
-      - "6380:6379"
-    networks:
-      - cs2-middleware_mmf_network
-    environment:
-      - REDIS_PASSWORD=redis
-    restart: always
-
   d2-api:
     build: .
     image: relative-fi/d2-api
@@ -22,10 +11,10 @@ services:
     depends_on:
       - redis
     networks:
-      - cs2-middleware_mmf_network
+      - tournament-service_default
     command: go run ./cmd/main.go
 
 
 networks:
-  cs2-middleware_mmf_network:
+  tournament-service_default:
     external: true
