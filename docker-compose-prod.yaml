@@ -8,8 +8,6 @@ services:
       - .env
     ports:
       - "8080:8080"
-    depends_on:
-      - redis
     networks:
       - tournament-service_default
     command: go run ./cmd/main.go
