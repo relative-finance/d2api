@@ -2,6 +2,7 @@ package v1
 
 import (
 	"context"
+	"d2api/pkg/handlers"
 	"d2api/pkg/requests"
 	"d2api/pkg/wires"
 	"strconv"
@@ -27,7 +28,34 @@ func RegisterServer(router *gin.Engine, ctx context.Context) {
 			player.GET("/:steamId/matches", getPlayerHistory)
 			player.GET("/od/:steamId/matches", getPlayerHistoryOD)
 		}
+
+		bots := v1.Group("/bots")
+		{
+			bots.GET("", getBots)
+			bots.DELETE("/:username", deleteBot) // for leaving a lobby
+		}
 	}
+}
+
+func getBots(c *gin.Context) {
+	bots := handlers.Hs.GetAllBots()
+	c.JSON(200, bots)
+}
+
+func deleteBot(c *gin.Context) {
+	username := c.Param("username")
+	if username == "" {
+		c.JSON(400, gin.H{"error": "need to send a valid username"})
+		return
+	}
+
+	err := handlers.Hs.DestroyLobby(username)
+	if err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(200, gin.H{"message": "bot " + username + " left lobby"})
 }
 
 func postReinvitePlayers(c *gin.Context) {

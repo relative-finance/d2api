@@ -17,15 +17,15 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func MatchScheduleThread(hrs *[]*h.Handler, req requests.CreateMatchReq, matchIdx string, timeToCancel uint32) {
+func MatchScheduleThread(req requests.CreateMatchReq, matchIdx string, timeToCancel uint32) {
 	waitForTimeToStart(req)
-	handler, handlerId, err := getHandler(hrs)
+	handler, err := getHandler()
 	if err != nil {
 		log.Println("Failed to get handler:", err)
 		return
 	}
 
-	if ok := getAndSetMatchToRedis(matchIdx, handlerId, req.TeamA, req.TeamB); !ok {
+	if ok := getAndSetMatchToRedis(matchIdx, handler, req.TeamA, req.TeamB); !ok {
 		return
 	}
 
@@ -243,8 +243,10 @@ func createLobby(handler *h.Handler, req requests.CreateMatchReq) (*protocol.CSO
 	time.Sleep(1 * time.Second)
 	if res, err := handler.DotaClient.DestroyLobby(context.Background()); err != nil {
 		log.Println("Failed to destroy lobby: ", err, res)
+		handler.Broken = true
 		return nil, err
 	}
+
 	time.Sleep(2 * time.Second)
 
 	lobbyVisibility := protocol.DOTALobbyVisibility_DOTALobbyVisibility_Public
@@ -255,6 +257,7 @@ func createLobby(handler *h.Handler, req requests.CreateMatchReq) (*protocol.CSO
 		PassKey:      proto.String(req.LobbyConfig.PassKey),
 		ServerRegion: proto.Uint32(req.LobbyConfig.ServerRegion),
 		GameMode:     proto.Uint32(GetGameModeFromString(req.LobbyConfig.GameMode)),
+		FillWithBots: proto.Bool(req.LobbyConfig.FillWithBots),
 	}
 
 	handler.DotaClient.CreateLobby(lobbyDetails)
@@ -271,19 +274,19 @@ func createLobby(handler *h.Handler, req requests.CreateMatchReq) (*protocol.CSO
 	return nil, errors.New("failed to create lobby")
 }
 
-func getHandler(hrs *[]*h.Handler) (*h.Handler, uint16, error) {
+func getHandler() (*h.Handler, error) {
 	for i := 0; i < 15; i++ {
-		handler, handlerId, err := h.GetFreeHandler(*hrs)
+		handler, err := h.Hs.GetFreeHandler()
 		if err != nil {
 			time.Sleep(5 * time.Second)
 			log.Println("No available bot, retrying in 5 seconds", err)
 			continue
 		}
 
-		return handler, handlerId, nil
+		return handler, nil
 	}
 
-	return nil, 0, errors.New("no available bot")
+	return nil, errors.New("no available bot")
 }
 
 func waitForTimeToStart(req requests.CreateMatchReq) {

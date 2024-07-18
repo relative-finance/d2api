@@ -24,16 +24,14 @@ import (
 )
 
 type MatchService struct {
-	Handlers []*handlers.Handler
-	Config   *config.Config
-	Repo     *repository.Repository
+	Config *config.Config
+	Repo   *repository.Repository
 }
 
-func NewMatchService(handlers []*handlers.Handler, config *config.Config, repo *repository.Repository) MatchService {
+func NewMatchService(config *config.Config, repo *repository.Repository) MatchService {
 	return MatchService{
-		Handlers: handlers,
-		Config:   config,
-		Repo:     repo,
+		Config: config,
+		Repo:   repo,
 	}
 }
 
@@ -46,17 +44,23 @@ func (s *MatchService) ScheduleMatch(req requests.CreateMatchReq) (string, error
 
 	scheduled_matches.Add(matchIdx)
 
-	go utils.MatchScheduleThread(&s.Handlers, req, matchIdx, s.Config.TimeToCancel)
+	go utils.MatchScheduleThread(req, matchIdx, s.Config.TimeToCancel)
 	return matchIdx, nil
 }
 
 func (s *MatchService) GetMatch(matchIdx string) (interface{}, error) {
 	match, err := utils.GetMatchRedis(matchIdx)
 	if err != nil {
-		return nil, err
+		var match models.MatchMongo
+		err := s.Repo.Get("matches", bson.M{"_id": matchIdx}).Decode(&match)
+		if err != nil {
+			return nil, err
+		}
+
+		return match, nil
 	}
 
-	handler, _, err := handlers.GetFirstHandler(s.Handlers)
+	handler, err := handlers.Hs.GetMatchHandler(match.Handler)
 	if err != nil {
 		return nil, err
 	}
@@ -140,6 +144,12 @@ func (s *MatchService) GetMatchInfo(matchIdx string) (*response.MatchInfo, error
 	case models.MatchDetails:
 		log.Println("MatchDetails")
 		matchInfo = &response.MatchInfo{Status: match.MatchStatus.Status}
+	case models.MatchMongo:
+		log.Println("MatchMongo")
+		matchInfo = &response.MatchInfo{Status: "finished"}
+	case models.MatchStatus:
+		log.Println("MatchStatus")
+		matchInfo = &response.MatchInfo{Status: match.Status}
 	default:
 		return nil, errors.New("unknown match type")
 	}
@@ -168,26 +178,34 @@ func (s *MatchService) GetPlayerHistory(steamId int64, limit int) (interface{}, 
 		return nil, err
 	}
 
-	var matchIds []uint64
+	var matchIds []string
 	if len(playerModel.Matches) < limit {
 		matchIds = playerModel.Matches
 	} else {
 		matchIds = playerModel.Matches[:limit]
 	}
 
-	handler, _, err := handlers.GetFirstHandler(s.Handlers)
-	if err != nil {
-		return nil, err
+	var matches []*models.MatchMongo
+	channel := make(chan *models.MatchMongo)
+	for _, matchId := range matchIds {
+		go func(matchId string) {
+			var match models.MatchMongo
+			err := s.Repo.Get("matches", bson.M{"_id": matchId}).Decode(&match)
+			if err != nil {
+				log.Println("Failed to get match:", err)
+				channel <- nil
+				return
+			}
+
+			channel <- &match
+		}(matchId)
 	}
 
-	var matches []*protocol.CMsgGCMatchDetailsResponse
-	for _, matchId := range matchIds {
-		details, err := handler.DotaClient.RequestMatchDetails(context.Background(), matchId)
-		if err != nil {
-			return nil, err
+	for range matchIds {
+		match := <-channel
+		if match != nil {
+			matches = append(matches, match)
 		}
-
-		matches = append(matches, details)
 	}
 
 	return matches, nil
@@ -199,7 +217,11 @@ func (s *MatchService) ReinvitePlayers(req requests.ReinvitePlayersReq) error {
 		return err
 	}
 
-	handler := s.Handlers[match.HandlerId]
+	handler, err := handlers.Hs.GetMatchHandler(match.Handler)
+	if err != nil {
+		return err
+	}
+
 	for _, player := range req.Players {
 		handler.DotaClient.InviteLobbyMember(steamid.SteamId(player))
 	}
