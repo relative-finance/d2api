@@ -1,18 +1,17 @@
 services:
   d2-api:
     build: .
-    image: relative-fi/d2-api
     container_name: d2-api
     restart: always
     env_file:
       - .env
     ports:
-      - "8080:8080"
+      - ${PORT}:${PORT}
     networks:
-      - showdown-api_default
+      - showdown-network
     command: go run ./cmd/main.go
 
 
 networks:
-  showdown-api_default:
+  showdown-network:
     external: true
