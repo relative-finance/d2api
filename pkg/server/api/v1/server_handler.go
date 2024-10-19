@@ -22,6 +22,7 @@ func RegisterServer(router *gin.Engine, ctx context.Context) {
 		}
 
 		v1.POST("/schedule-tournament", postScheduleTournament)
+		v1.GET("/health", healthHandler)
 
 		player := v1.Group("/player")
 		{
@@ -35,6 +36,10 @@ func RegisterServer(router *gin.Engine, ctx context.Context) {
 			bots.DELETE("/:username", deleteBot) // for leaving a lobby
 		}
 	}
+}
+
+func healthHandler(c *gin.Context) {
+	c.Status(200)
 }
 
 func getBots(c *gin.Context) {
